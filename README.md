@@ -10,6 +10,13 @@ A Python application that scrobbles songs played on internet radio stations to L
 
 - [x] Scrobbles songs played on internet radio stations to Last.fm and Spotify
 - [x] Supports configuration via YAML file
+- [x] **Plugin-based architecture** for supporting multiple radio stream formats
+- [x] **Strategy pattern** implementation for extensible stream parsing
+- [x] Support for ICY metadata streams (SHOUTcast/Icecast)
+- [x] Support for JSON API-based track information
+- [x] Support for RSS/XML feed-based track information
+- [x] Auto-detection of stream formats
+- [x] Multiple radio station support with different parsers
 - [ ] [Coming Soon] GUI version
 
 ## 📦 Installation
@@ -44,8 +51,27 @@ spotify:
   spotify_playlist_id: YOUR_SPOTIFY_PLAYLIST_ID
 
 radios:
+  # Traditional ICY metadata stream (auto-detected)
   - name: Radio 1
     stream_url: "http://us2.internet-radio.com:8443"
+    
+  # Radio station with JSON API for track info
+  - name: "Modern Radio"
+    stream_url: "http://modern-radio.example.com:8080/stream"
+    parser_type: "JSON API Parser"
+    parser_config:
+      api_endpoint: "http://modern-radio.example.com/api/nowplaying"
+      artist_field: "current_track.artist" 
+      title_field: "current_track.title"
+      
+  # Radio station with RSS feed for track info  
+  - name: "Classical FM"
+    stream_url: "http://classical-fm.example.com:8000"
+    parser_type: "RSS Parser"
+    parser_config:
+      rss_url: "http://classical-fm.example.com/nowplaying.xml"
+      artist_tag: "artist"
+      title_tag: "title"
 ```
 
 ### Last.fm Configuration
@@ -72,10 +98,21 @@ The spotify section is optional and allows you to configure scrobbling to Spotif
 
 ### Radio Configuration
 
-The `radios` section allows you to specify multiple radio stations. Each radio station should have the following properties:
+The `radios` section allows you to specify multiple radio stations with different stream formats. Each radio station supports the following properties:
 
 - 📻 `name`: The name of the radio station.
 - 🔊 `stream_url`: The URL of the radio station's audio stream.
+- 🔧 `parser_type` (optional): Explicit parser to use (e.g., "JSON API Parser", "RSS Parser"). If not specified, the system will auto-detect the format.
+- ⚙️ `parser_config` (optional): Parser-specific configuration options.
+
+#### Supported Stream Formats
+
+- **ICY Metadata** (SHOUTcast/Icecast): Traditional internet radio streams with embedded metadata
+- **JSON APIs**: Radio stations that provide track info via REST endpoints  
+- **RSS/XML Feeds**: Stations that publish current track info in RSS or XML format
+- **Custom Formats**: Easy to add new formats using the plugin architecture
+
+See `example_config.yaml` and `docs/adding_new_stream_formats.md` for detailed configuration examples.
 
 ## 📄 License
 

@@ -1,31 +1,42 @@
 import argparse
 import logging
 from pathlib import Path
-import re
 import time
 import datetime
-from typing import NamedTuple, Optional
+from typing import Optional, List
 import yaml
-import requests
 
 import pylast
 import spotipy
 from spotipy.oauth2 import SpotifyOAuth
 from .config_schema import Config
-
-class Track(NamedTuple):
-    """Track description"""
-    artist: str
-    title: str
-
-    def __str__(self) -> str:
-        return f"Artist: {self.artist}, Title: {self.title}"
+from .stream_parsers import Track, StreamParserFactory
 
 class RadioScrobbler:
     def __init__(self, config: Config):
         self.__logger = logging.getLogger(__name__)
         self.config = config
         self.track_old = None
+        
+        # Initialize stream parser factory
+        self.parser_factory = StreamParserFactory()
+        
+        # Initialize stream parsers for each radio
+        self.stream_parsers = []
+        for radio in config.radios:
+            parser = self.parser_factory.create_parser(
+                stream_url=str(radio.stream_url),
+                parser_type=radio.parser_type,
+                config=radio.parser_config or {}
+            )
+            if parser:
+                self.stream_parsers.append((radio.name, parser))
+                self.__logger.info(f"Initialized parser for {radio.name}: {parser.get_parser_name()}")
+            else:
+                self.__logger.error(f"Failed to create parser for radio: {radio.name}")
+
+        if not self.stream_parsers:
+            raise ValueError("No valid stream parsers could be created")
 
         # Initialize Last.fm network
         self.network = pylast.LastFMNetwork(
@@ -47,27 +58,7 @@ class RadioScrobbler:
                 )
             )
 
-    @staticmethod
-    def __decode_metadata(metadata: bytes) -> str:
-        """Decode the given metadata byte sequence into a string
 
-        Parameters
-        ----------
-        metadata : bytes
-            The byte sequence representing the metadata
-
-        Returns
-        -------
-        str
-            The decoded metadata as a string
-        """
-        try:
-            decoded_metadata = metadata.decode('utf-8')
-        except UnicodeDecodeError:
-            # Try a different encoding or use the 'ignore' error handling strategy
-            decoded_metadata = metadata.decode('latin-1', errors='ignore')
-        # TODO: Use other decoders and process possible exceptions
-        return decoded_metadata
 
     def search_spotify_track(self, track: Track) -> Optional[str]:
         # Search for the track
@@ -84,44 +75,34 @@ class RadioScrobbler:
             self.__logger.warning(f'Track {track} not found in spotify')
             return None
 
-    @staticmethod
-    def clean_track(track: Track) -> Track:
-        return Track(
-            artist=track.artist,
-            title=re.sub(r'\[.*?\]', '', track.title)
-        )
+    def get_current_tracks(self) -> List[Track]:
+        """Get current tracks from all configured radio streams.
 
+        Returns:
+            List of currently playing tracks from all available streams
+        """
+        tracks = []
+        for radio_name, parser in self.stream_parsers:
+            try:
+                track = parser.get_current_track()
+                if track:
+                    tracks.append(track)
+                    self.__logger.debug(f"Got track from {radio_name}: {track}")
+                else:
+                    self.__logger.debug(f"No track found for {radio_name}")
+            except Exception as e:
+                self.__logger.error(f"Error getting track from {radio_name}: {e}")
+        
+        return tracks
+    
     def get_artist_track(self) -> Optional[Track]:
-        """Get track from radio stream
+        """Get track from radio stream (backwards compatibility method).
 
-        Returns
-        -------
-        Optional[Track]
+        Returns:
             Track instance if track metadata found, None otherwise
         """
-        # TODO: get stream frome more than one radio
-        response = requests.get(
-            self.config.radios[0].stream_url,
-            headers={'Icy-MetaData': '1'},
-            stream=True
-        )
-        # Retrieve the Icy-MetaInt header
-        icy_metaint_header = response.headers.get('icy-metaint')
-
-        if icy_metaint_header:
-            metaint = int(icy_metaint_header)
-            for chunk in response.iter_content(chunk_size=metaint + 255):
-                # Extract metadata from the chunk
-                metadata = self.__decode_metadata(chunk[metaint:])
-                track_match = re.search(r'StreamTitle=(?P<track>[^;]+)', metadata)
-
-                if track_match:
-                    track_info = track_match.group('track')
-                    artist, title = track_info.split(' - ')
-                    track = self.clean_track(Track(artist=artist, title=title))
-                    return track
-
-        return None
+        tracks = self.get_current_tracks()
+        return tracks[0] if tracks else None
 
 
     def scrobble(self, track: Track):
