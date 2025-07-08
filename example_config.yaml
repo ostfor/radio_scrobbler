@@ -1,0 +1,54 @@
+lastfm:
+  api_key: your_lastfm_api_key
+  shared_secret: your_lastfm_shared_secret
+  user_name: your_lastfm_username
+  md5_password: your_md5_hashed_password
+
+spotify:
+  client_id: your_spotify_client_id
+  client_secret: your_spotify_client_secret
+  redirect_url: http://localhost:8888/callback
+  spotify_playlist_id: your_spotify_playlist_id
+
+radios:
+  # Traditional ICY metadata stream (auto-detected)
+  - name: "Radio 1"
+    stream_url: "http://us2.internet-radio.com:8443"
+    # parser_type is optional - will auto-detect ICY format
+    
+  # ICY stream with explicit parser configuration
+  - name: "Jazz Radio"
+    stream_url: "http://jazz-radio.example.com:8000/stream"
+    parser_type: "IcyStreamParser"
+    parser_config:
+      timeout: 15
+      
+  # Radio station with JSON API for track info
+  - name: "Modern Radio"
+    stream_url: "http://modern-radio.example.com:8080/stream"
+    parser_type: "JSON API Parser"
+    parser_config:
+      api_endpoint: "http://modern-radio.example.com/api/nowplaying"
+      artist_field: "current_track.artist"
+      title_field: "current_track.title"
+      headers:
+        User-Agent: "RadioScrobbler/1.0"
+        
+  # Radio station with RSS feed for track info
+  - name: "Classical FM"
+    stream_url: "http://classical-fm.example.com:8000"
+    parser_type: "RSS Parser"
+    parser_config:
+      rss_url: "http://classical-fm.example.com/nowplaying.xml"
+      artist_tag: "artist"
+      title_tag: "title"
+      timeout: 10
+      
+  # Another RSS example with different format
+  - name: "Rock Station"
+    stream_url: "http://rock-station.example.com:8000"
+    parser_type: "RSS Parser"
+    parser_config:
+      rss_url: "http://rock-station.example.com/feed.rss"
+      description_separator: " - "
+      timeout: 12
